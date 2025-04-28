@@ -7,72 +7,72 @@ pub fn hash(input: String) -> String {
     let in_len: u64 = input.len() as u64;
     // padding (input length + 8 bytes from length + 1 byte for 1 bit) to align to 512 bits
     let pad_len: u64 = 64 - (in_len + 9) % 64;
-    let total_len = pad_len + in_len + 1;
-    let mut m_bytes: Vec<u8> = Vec::with_capacity((total_len + 8) as usize);
+    let total_byte_len = pad_len + in_len + 9;
+    let mut m_bytes: Vec<u8> = Vec::with_capacity(total_byte_len as usize);
     for c in input.as_bytes() {
         m_bytes.push(*c);
     }
     m_bytes.push(0x80);
-    while m_bytes.len() < total_len as usize {
+    while m_bytes.len() < (total_byte_len - 8) as usize {
         m_bytes.push(0);
     }
     for i in (0..8).rev() {
         m_bytes.push(((in_len >> i * 8) & 0xff) as u8);
     }
     // 512 bit chunks
-    let n_chunks = (total_len + 8) / 8;
+    let n_chunks = total_byte_len / 64;
+    println!("{:?}", m_bytes);
+    println!("{:?}", n_chunks);
     for i in 0..n_chunks {
-        let mut hash_word: [u32; 80] = [0; 80];
-        for j in 0..15 {
-            hash_word[j] = ((m_bytes[4 * j] as u32) << 24) as u32
-                | ((m_bytes[4 * j + 1] as u32) << 16) as u32
-                | ((m_bytes[4 * j + 2] as u32) << 8) as u32
-                | (m_bytes[4 * j + 3]) as u32;
+        let mut w: [u32; 80] = [0; 80];
+        for j in 0..16 {
+            w[j] = ((m_bytes[(4 * j) + 64 * i as usize] as u32) << 24) as u32
+                | ((m_bytes[4 * j + 1 + 64 * i as usize] as u32) << 16) as u32
+                | ((m_bytes[4 * j + 2 + 64 * i as usize] as u32) << 8) as u32
+                | (m_bytes[4 * j + 3 + 64 * i as usize]) as u32;
         }
         for j in 16..80 {
-            hash_word[j] = leftrotate(
-                hash_word[j - 3] ^ hash_word[j - 8] ^ hash_word[j - 14] ^ hash_word[j - 16],
-                1,
-            );
+            w[j] = leftrotate(w[j - 3] ^ w[j - 8] ^ w[j - 14] ^ w[j - 16], 1);
         }
-        let mut hv0: u32 = h0;
-        let mut hv1: u32 = h1;
-        let mut hv2: u32 = h2;
-        let mut hv3: u32 = h3;
-        let mut hv4: u32 = h4;
-        let mut hv5: u32 = 0;
-        let mut hv6: u32 = 0;
+        let mut a: u32 = h0;
+        let mut b: u32 = h1;
+        let mut c: u32 = h2;
+        let mut d: u32 = h3;
+        let mut e: u32 = h4;
+        let mut f: u32;
+        let mut k: u32;
 
         for j in 0..80 {
             if j < 20 {
-                hv5 = (hv1 & hv2) | (!hv1 & hv3);
-                hv6 = 0x5A827999;
+                // TODO xor vs or
+                f = (b & c) ^ ((!b) & d);
+                k = 0x5A827999;
             } else if j < 40 {
-                hv5 = hv1 ^ hv2 ^ hv3;
-                hv6 = 0x6ED9EBA1;
+                f = b ^ c ^ d;
+                k = 0x6ED9EBA1;
             } else if j < 60 {
-                hv5 = (hv1 & hv2) ^ (hv1 & hv3) ^ (hv2 & hv3);
-                hv6 = 0x8F1BBCDC;
+                f = (b & c) ^ (b & d) ^ (c & d);
+                k = 0x8F1BBCDC;
             } else {
-                hv5 = hv1 ^ hv2 ^ hv3;
-                hv6 = 0xCA62C1D6;
+                f = b ^ c ^ d;
+                k = 0xCA62C1D6;
             }
-            let temp: u32 = leftrotate(hv0, 5)
-                .wrapping_add(hv5)
-                .wrapping_add(hv4)
-                .wrapping_add(hv6)
-                .wrapping_add(hash_word[j]);
-            hv4 = hv3;
-            hv3 = hv2;
-            hv2 = leftrotate(hv1, 30);
-            hv1 = hv0;
-            hv0 = temp;
+            let temp: u32 = leftrotate(a, 5)
+                .wrapping_add(f)
+                .wrapping_add(e)
+                .wrapping_add(k)
+                .wrapping_add(w[j]);
+            e = d;
+            d = c;
+            c = leftrotate(b, 30);
+            b = a;
+            a = temp;
         }
-        h0 = h0.wrapping_add(hv0);
-        h1 = h1.wrapping_add(hv1);
-        h2 = h2.wrapping_add(hv2);
-        h3 = h3.wrapping_add(hv3);
-        h4 = h4.wrapping_add(hv4);
+        h0 = h0.wrapping_add(a);
+        h1 = h1.wrapping_add(b);
+        h2 = h2.wrapping_add(c);
+        h3 = h3.wrapping_add(d);
+        h4 = h4.wrapping_add(e);
     }
     hash_chunks_to_string([h0, h1, h2, h3, h4])
 }
@@ -84,16 +84,11 @@ fn leftrotate(n: u32, amount: u8) -> u32 {
 }
 
 fn hash_chunks_to_string(chunks: [u32; 5]) -> String {
-    let mut res: [u8; 20] = [0; 20];
-    for i in 0..5 {
-        for j in (0..4).rev() {
-            res[i * 4 + (3 - j)] = ((chunks[i] >> 8 * j) & 0xff) as u8;
-        }
-    }
+    println!("{:?}", chunks);
     // TODO fix the unwrap
     let mut res_string = String::with_capacity(20);
-    for i in 0..20 {
-        res_string.push_str(format!("{:x}", res[i]).as_str());
+    for i in 0..5 {
+        res_string.push_str(format!("{:x}", chunks[i]).as_str());
     }
     res_string
     // String::from_utf8(res.to_vec()).unwrap()
@@ -102,6 +97,33 @@ fn hash_chunks_to_string(chunks: [u32; 5]) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
+    #[test]
+    fn hash_rfctests() {
+        let test1 = String::from("abc");
+        let test2a = String::from("abcdbcdecdefdefgefghfghighijhi");
+        let test2b = String::from("jkijkljklmklmnlmnomnopnopq");
+        let mut test2 = String::new();
+        test2.push_str(&test2a);
+        test2.push_str(&test2b);
+        let test3 = String::from("a");
+        let test4a = String::from("01234567012345670123456701234567");
+        let mut test4 = String::from("01234567012345670123456701234567");
+        test4.push_str(&test4a);
+        let testarr: [String; 4] = [test1, test2, test3, test4];
+        let res: Vec<String> = testarr.iter().map(|test| hash(test.to_string())).collect();
+
+        let expected = [
+            "A9993E364706816ABA3E25717850C26C9CD0D89D",
+            "84983E441C3BD26EBAAE4AA1F95129E5E54670F1",
+            "34AA973CD4C4DAA4F61EEB2BDBAD27316534016F",
+            "DEA356A2CDDD90C7A7ECEDC5EBB563934F460452",
+        ];
+        let expected: Vec<String> = expected.iter().map(|s| s.to_lowercase()).collect();
+
+        for i in 0..4 {
+            assert_eq!(res[i], expected[i]);
+        }
+    }
     #[test]
     fn hash_short() {
         let test1 = String::from("hello");

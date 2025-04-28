@@ -50,7 +50,9 @@ fn handle_connection(mut stream: TcpStream) {
 
 fn send_handshake(key: &str) {
     let status_line = "HTTP/1.1 101 Switching Protocols";
-    let ws_accept = base64::encode(sha1::hash(format!("{key}{}", websocket::GUID)));
+    let ws_accept = base64::encode(
+        sha1::SHA1Context::initialize_hash().hash(format!("{key}{}", websocket::GUID)),
+    );
     let header_fields = format!(
         "Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {ws_accept}\r\nSec-WebSocket-Protocol: chat"
     );

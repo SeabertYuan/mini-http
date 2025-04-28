@@ -16,9 +16,10 @@ pub fn hash(input: String) -> String {
     while m_bytes.len() < total_len as usize {
         m_bytes.push(0);
     }
-    for i in 0..8 {
-        m_bytes.push(((in_len >> (7 - i) * 8) & 0xff) as u8);
+    for i in (0..8).rev() {
+        m_bytes.push(((in_len >> i * 8) & 0xff) as u8);
     }
+    // 512 bit chunks
     let n_chunks = (total_len + 8) / 8;
     for i in 0..n_chunks {
         let mut hash_word: [u32; 80] = [0; 80];
@@ -78,7 +79,7 @@ pub fn hash(input: String) -> String {
 
 /// Rotate a u32 left by the amount specified.
 fn leftrotate(n: u32, amount: u8) -> u32 {
-    let msb = n >> (32 - amount);
+    let msb: u32 = n >> (32 - amount);
     (n << amount) | msb
 }
 
@@ -90,7 +91,12 @@ fn hash_chunks_to_string(chunks: [u32; 5]) -> String {
         }
     }
     // TODO fix the unwrap
-    String::from_utf8(res.to_vec()).unwrap()
+    let mut res_string = String::with_capacity(20);
+    for i in 0..20 {
+        res_string.push_str(format!("{:x}", res[i]).as_str());
+    }
+    res_string
+    // String::from_utf8(res.to_vec()).unwrap()
 }
 
 #[cfg(test)]
@@ -106,5 +112,24 @@ mod test {
         assert_eq!(hash(test2), "a2590e2ad169b79e91c4c8fcc804f7769d8d7f2c");
         assert_eq!(hash(test3), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
         assert_eq!(hash(test4), "83db02e1cba58c43d01116c50014913b47fa473b");
+    }
+
+    #[test]
+    fn leftrotate_1() {
+        let simple = 0b1;
+        assert_eq!(leftrotate(simple, 1), 0b10);
+        let long = 0b10000000000000001;
+        assert_eq!(leftrotate(long, 1), 0b100000000000000010);
+        let wrap = 0b10000000000000000000000000000000;
+        assert_eq!(leftrotate(wrap, 1), 0b1);
+    }
+    #[test]
+    fn leftrotate_5() {
+        let simple = 0b100000;
+        assert_eq!(leftrotate(simple, 5), 0b10000000000);
+        let long = 0b11011;
+        assert_eq!(leftrotate(long, 5), 0b1101100000);
+        let wrap = 0b10000000000000000000000000000000;
+        assert_eq!(leftrotate(wrap, 5), 0b10000);
     }
 }

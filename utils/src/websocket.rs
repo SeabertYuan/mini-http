@@ -1,3 +1,5 @@
+use std::ops::BitOr;
+
 pub enum OpCode {
     Cont = 0,
     Text = 1,
@@ -6,27 +8,70 @@ pub enum OpCode {
     Ping = 9,
     Pong = 10,
 }
+impl BitOr for OpCode {
+    type Output = u8;
+    fn bitor(self, other: OpCode) -> u8 {
+        self as u8 | other as u8
+    }
+}
+
+pub enum FrameHeaderOpt {
+    FIN = 0x80,
+    RSV1 = 0x40,
+    RSV2 = 0x20,
+    RSV3 = 0x10,
+}
+impl BitOr<OpCode> for FrameHeaderOpt {
+    type Output = u8;
+    fn bitor(self, other: OpCode) -> u8 {
+        self as u8 | other as u8
+    }
+}
 
 pub const GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 pub struct WsMessage {
     frame_header: u8, // fin, rsv1, rsv2, rsv3, opcode
     p_len: u8,
-    ext_p_len: Option<[u8; 6]>, // possible extended p_len + masking
+    ext_p_len: Option<Vec<u8>>, // possible extended p_len + masking
     payload: Box<Vec<u8>>,      // starts with [u8, 2] for masking
 }
 
 impl WsMessage {
-    fn is_fin(&self) -> bool {
+    pub fn new(header: u8, payload: &str) -> WsMessage {
+        let mut res = WsMessage {
+            frame_header: header,
+            p_len: 0,
+            ext_p_len: None,
+            payload: Box::new(payload.as_bytes().to_vec()),
+        };
+        let mut ext_bytes = 0;
+        if payload.len() > 0xffff {
+            res.p_len = 127;
+            ext_bytes = 8;
+        } else if payload.len() > 125 {
+            res.p_len = 126;
+            ext_bytes = 2;
+        } else {
+            res.p_len = payload.len() as u8
+        };
+        res.ext_p_len = Some(
+            (0..ext_bytes)
+                .map(|i| ((payload.len() >> (7 - (i * 8))) & 0xff) as u8)
+                .collect(),
+        );
+        res
+    }
+    pub fn is_fin(&self) -> bool {
         self.frame_header >> 7 == 1
     }
-    fn rsv_bits(&self) -> u8 {
+    pub fn rsv_bits(&self) -> u8 {
         (self.frame_header >> 4) & 0x7
     }
-    fn is_masked(&self) -> bool {
+    pub fn is_masked(&self) -> bool {
         true
     }
-    fn get_frame_type(&self) -> OpCode {
+    pub fn get_frame_type(&self) -> OpCode {
         return match self.frame_header & 0xf {
             0 => OpCode::Cont,
             1 => OpCode::Text,
@@ -38,18 +83,18 @@ impl WsMessage {
         };
     }
     // 0 if invalid, otherwise the size of the payload
-    fn get_p_len(&self) -> usize {
+    pub fn get_p_len(&self) -> usize {
         return match self.p_len & 0b0111111 {
             0..126 => (self.p_len & 0b0111111) as usize,
             126 => {
-                if let Some(pl) = self.ext_p_len {
-                    return (pl[0] as usize) << 8 | (pl[1] as usize);
+                if let Some(pl) = &self.ext_p_len {
+                    (pl[0] as usize) << 8 | (pl[1] as usize)
                 } else {
-                    return 0;
+                    0
                 }
             }
             127 => {
-                if let Some(pl) = self.ext_p_len {
+                if let Some(pl) = &self.ext_p_len {
                     let mut ans = 0;
                     for i in 0..8 {
                         ans = ans | (pl[i] as usize) << 8 * (7 - i);
@@ -62,7 +107,7 @@ impl WsMessage {
             _ => 0,
         };
     }
-    fn get_payload_raw(&self) -> Vec<u8> {
+    pub fn get_payload_raw(&self) -> Vec<u8> {
         let p_len: usize = self.get_p_len();
         if p_len > 0 {
             let mut p_buffer = Vec::with_capacity(p_len);
@@ -73,7 +118,17 @@ impl WsMessage {
         }
         panic!(); // TODO
     }
-    fn get_payload_string(&self) -> String {
+    pub fn get_payload_string(&self) -> String {
         String::from_utf8(self.get_payload_raw()).unwrap()
+    }
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut res = Vec::new();
+        res.push(self.frame_header);
+        res.push(self.p_len);
+        if let Some(ext_len) = &self.ext_p_len {
+            res.append(&mut ext_len.clone());
+        }
+        res.append(&mut self.payload.clone());
+        res
     }
 }

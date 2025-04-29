@@ -31,6 +31,7 @@ impl SHA1Context {
         self.curr_chunk = [0; 64];
     }
 
+    // TODO idiomatic rust??? !
     fn pad_hash(&mut self, mes_len: u64) {
         if self.curr_chunk_idx > 55 {
             self.curr_chunk[self.curr_chunk_idx] = 0x80;
@@ -56,7 +57,6 @@ impl SHA1Context {
         for i in (0..8).rev() {
             self.curr_chunk[self.curr_chunk_idx + i] = ((mes_len >> ((7 - i) * 8)) & 0xff) as u8;
         }
-        // println!("{:?}", self.curr_chunk);
         self.hash_chunk();
     }
 
@@ -66,7 +66,6 @@ impl SHA1Context {
         for b in message.as_bytes() {
             self.curr_chunk[self.curr_chunk_idx] = b & 0xff;
             self.curr_chunk_idx += 1;
-            // TODO maybe need to keep track of bit length of context?
             if self.curr_chunk_idx == 64 {
                 self.hash_chunk();
                 self.curr_chunk_idx = 0;
@@ -128,7 +127,6 @@ impl SHA1Context {
             .iter()
             .for_each(|b| res_string.push_str(format!("{:02x}", b).as_str()));
         res_string
-        // String::from_utf8(res.to_vec()).unwrap()
     }
 
     fn hash_chunks_to_bytes(&self) -> [u8; 20] {
@@ -144,11 +142,9 @@ fn parity(b: u32, c: u32, d: u32) -> u32 {
     b ^ c ^ d
 }
 fn choose(b: u32, c: u32, d: u32) -> u32 {
-    // TODO xor vs or
     (b & c) ^ ((!b) & d)
 }
 fn majority(b: u32, c: u32, d: u32) -> u32 {
-    // TODO xor vs or
     (b & c) ^ (b & d) ^ (c & d)
 }
 

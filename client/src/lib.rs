@@ -28,5 +28,5 @@ fn send_handshake(key: &str) -> String {
     );
     let client_handshake = format!("{request_line}\r\n{header_fields}");
     //TODO send the handshake
-    base64::encode(sha1::SHA1Context::initialize_hash().hash(format!("{key}{}", websocket::GUID)))
+    base64::encode(sha1::SHA1Context::new().hash(format!("{key}{}", websocket::GUID)))
 }

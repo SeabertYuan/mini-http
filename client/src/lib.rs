@@ -42,11 +42,12 @@ pub fn run() {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
         match input.as_str() {
-            "/stop" => {
+            "/stop\n" => {
                 send_close();
                 channel_open = false;
             }
-            "/messages" => {
+            "/messages\n" => {
+                send_text_msg(&input, &mut client);
                 if let Some(res) = get_response(&mut client) {
                     println!("{:?}", res);
                 } else {
@@ -93,10 +94,10 @@ fn is_valid_response(key: &str, response: &str) -> bool {
 fn get_response(client: &mut TcpStream) -> Option<String> {
     println!("getting response");
     let mut res = String::new();
-    let mut buf = [0u8; 4096];
+    let mut buf = [0u8; 8192];
     let mut buf_read = client.read(&mut buf).unwrap();
     res.push_str(str::from_utf8(&buf[..buf_read]).unwrap());
-    while buf_read == 4096 {
+    while buf_read == 8192 {
         buf_read = client.read(&mut buf).unwrap();
         res.push_str(str::from_utf8(&buf[..buf_read]).unwrap());
     }

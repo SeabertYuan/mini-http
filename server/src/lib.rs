@@ -99,24 +99,30 @@ fn handle_connection(mut stream: TcpStream) {
             {
                 let key = request_lines[4].split(" ").nth(1).unwrap();
                 send_handshake(key, &mut stream);
+                let mut line = String::new();
                 loop {
                     // TODO make this not suspiciuos
                     let mut read = stream.read(&mut buf).unwrap();
                     // println!("{:?}", buf);
-                    let message = websocket::WsMessage::deserialize(buf[..read].to_vec());
-                    println!("{:?}", message);
-                    //     .get_payload_string();
-                    // let mut line = String::from(message);
-                    // while read == 8192 {
-                    //     read = stream.read(&mut buf).unwrap();
-                    //     line.push_str(
-                    //         websocket::WsMessage::deserialize(buf[..read].to_vec())
-                    //             .get_payload_string()
-                    //             .as_str(),
-                    //     );
-                    // }
+                    let message = websocket::WsMessage::deserialize(buf[..read].to_vec())
+                        .get_payload_string();
+                    match message.as_str() {
+                        "/messages\n" => {
+                            stream.write_all(&line.as_bytes()).unwrap();
+                            stream.flush().unwrap();
+                        }
+                        _ => println!("got"),
+                    }
+                    while read == 8192 {
+                        read = stream.read(&mut buf).unwrap();
+                        line.push_str(
+                            websocket::WsMessage::deserialize(buf[..read].to_vec())
+                                .get_payload_string()
+                                .as_str(),
+                        );
+                    }
+                    line.push_str(message.as_str());
                     // println!("{}", line);
-                    thread::sleep(std::time::Duration::from_secs(1));
                 }
                 // ("HTTP/1.1 200 OK", "./server/chat.html")
             } else {

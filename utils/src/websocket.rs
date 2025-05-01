@@ -122,8 +122,8 @@ impl WsMessage {
     }
     // 0 if invalid, otherwise the size of the payload
     pub fn get_p_len(&self) -> usize {
-        return match self.p_len & 0b0111111 {
-            0..126 => (self.p_len & 0b0111111) as usize,
+        return match self.p_len & 0x7f {
+            0..126 => (self.p_len & 0x7f) as usize,
             126 => {
                 if let Some(pl) = &self.ext_p_len {
                     (pl[0] as usize) << 8 | (pl[1] as usize)
@@ -150,7 +150,7 @@ impl WsMessage {
         if p_len > 0 {
             let mut p_buffer = Vec::with_capacity(p_len);
             for i in 0..p_len {
-                p_buffer[i] = self.payload[0];
+                p_buffer.push(self.payload[i]);
             }
             return p_buffer;
         }

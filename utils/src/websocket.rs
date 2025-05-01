@@ -37,6 +37,17 @@ pub struct WsMessage {
     payload: Box<Vec<u8>>,      // starts with [u8, 2] for masking
 }
 
+impl std::fmt::Debug for WsMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WsMessage")
+            .field("frame_header", &self.frame_header)
+            .field("p_len", &self.p_len)
+            .field("ext_p_len", &self.ext_p_len)
+            .field("payload", &std::str::from_utf8(&self.payload))
+            .finish()
+    }
+}
+
 impl WsMessage {
     pub fn new(header: u8, payload: &str) -> WsMessage {
         let mut res = WsMessage {
@@ -57,10 +68,37 @@ impl WsMessage {
         };
         res.ext_p_len = Some(
             (0..ext_bytes)
-                .map(|i| ((payload.len() >> (7 - (i * 8))) & 0xff) as u8)
+                .map(|i| ((payload.len() >> ((ext_bytes - i - 1) * 8)) & 0xff) as u8)
                 .collect(),
         );
         res
+    }
+    pub fn deserialize(b_stream: Vec<u8>) -> WsMessage {
+        let (ext_p_len, p_start_idx) = if b_stream[1] < 126 {
+            (None, 2)
+        } else if b_stream[1] == 126 {
+            (Some(vec![b_stream[2], b_stream[3]]), 4)
+        } else {
+            (
+                Some(vec![
+                    b_stream[2],
+                    b_stream[3],
+                    b_stream[4],
+                    b_stream[5],
+                    b_stream[6],
+                    b_stream[7],
+                    b_stream[8],
+                    b_stream[9],
+                ]),
+                10,
+            )
+        };
+        WsMessage {
+            frame_header: b_stream[0],
+            p_len: b_stream[1],
+            ext_p_len,
+            payload: Box::new(b_stream[p_start_idx..].to_vec()),
+        }
     }
     pub fn is_fin(&self) -> bool {
         self.frame_header >> 7 == 1
@@ -116,7 +154,7 @@ impl WsMessage {
             }
             return p_buffer;
         }
-        panic!(); // TODO
+        vec![]
     }
     pub fn get_payload_string(&self) -> String {
         String::from_utf8(self.get_payload_raw()).unwrap()

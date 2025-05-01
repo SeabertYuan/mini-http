@@ -26,6 +26,10 @@ pub fn run() {
     let mut recv_response = false;
     while !recv_response {
         //GET response,
+        println!("waiting for response");
+        // client
+        //     .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        //     .unwrap();
         if let Some(response) = get_response(&mut client) {
             if is_valid_response(key, response.as_str()) {
                 println!("verified can now start yapping");
@@ -42,6 +46,13 @@ pub fn run() {
                 send_close();
                 channel_open = false;
             }
+            "/messages" => {
+                if let Some(res) = get_response(&mut client) {
+                    println!("{:?}", res);
+                } else {
+                    println!("error of some sort");
+                }
+            }
             _ => send_text_msg(&input, &mut client),
         }
     }
@@ -54,11 +65,13 @@ fn send_handshake(key: &str, client: &mut TcpStream) {
         "Host: {SERVER}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13"
     );
     let client_handshake = format!("{request_line}\r\n{header_fields}");
-    client.write(client_handshake.as_bytes()).unwrap();
+    client.write_all(&client_handshake.as_bytes()).unwrap();
+    client.flush().unwrap();
 }
 
 // TODO make this more robust like the RFC spec
 fn is_valid_response(key: &str, response: &str) -> bool {
+    println!("validating response");
     let expected_key =
         base64::encode(sha1::SHA1Context::new().hash(format!("{key}{}", websocket::GUID)));
     let expected_lines = [
@@ -68,26 +81,26 @@ fn is_valid_response(key: &str, response: &str) -> bool {
         &format!("Sec-WebSocket-Accept: {expected_key}"),
         "Sec-WebSocket-Protocol: chat",
     ];
-    response
-        .split("\r\n")
+    let response_lines: Vec<&str> = response.split("\r\n").collect();
+    expected_lines
+        .iter()
         .enumerate()
-        .fold(true, |acc, (i, res_line)| {
-            acc && expected_lines[i] == res_line
+        .fold(true, |acc, (i, exp_line)| {
+            acc && exp_line == &response_lines[i]
         })
 }
 
 fn get_response(client: &mut TcpStream) -> Option<String> {
+    println!("getting response");
     let mut res = String::new();
-    let mut buf: [u8; 4096] = [0; 4096];
+    let mut buf = [0u8; 4096];
     let mut buf_read = client.read(&mut buf).unwrap();
-    res.push_str(str::from_utf8(&buf).unwrap());
-    while buf_read != 0 {
+    res.push_str(str::from_utf8(&buf[..buf_read]).unwrap());
+    while buf_read == 4096 {
         buf_read = client.read(&mut buf).unwrap();
-        for i in buf_read..4096 {
-            buf[i] = 0;
-        }
-        res.push_str(str::from_utf8(&buf).unwrap());
+        res.push_str(str::from_utf8(&buf[..buf_read]).unwrap());
     }
+    println!("got response: {}", res);
     if res.len() > 0 { Some(res) } else { None }
 }
 
@@ -149,7 +162,7 @@ fn send_text_msg(message: &str, client: &mut TcpStream) {
         ));
     }
     if let Some(ws_message) = ws_message {
-        client.write(&ws_message.serialize()[..]).unwrap();
+        client.write_all(&ws_message.serialize()[..]).unwrap();
     } else {
         println!("lol didn't send");
     }

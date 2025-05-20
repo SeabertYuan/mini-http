@@ -4,7 +4,7 @@ use ws_utils::{base64, sha1, websocket};
 
 use std::{
     fs,
-    io::{BufReader, prelude::*},
+    io::prelude::*,
     net::{TcpListener, TcpStream},
     thread,
     time::Duration,

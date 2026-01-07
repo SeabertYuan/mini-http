@@ -15,25 +15,34 @@ use crate::threadpool::ThreadPool;
 const SERVER: &str = "127.0.0.1:7878";
 
 pub fn run() {
-    // TODO should handle errors should this binding have problems
-    let listener = TcpListener::bind(SERVER).unwrap();
+    match TcpListener::bind(SERVER) {
+        Ok(listener) => {
+            let pool = ThreadPool::new(5);
 
-    let pool = ThreadPool::new(5);
-
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        pool.execute(|| {
-            handle_connection(stream);
-        });
+            // TODO free listeners
+            for stream in listener.incoming().take(2) {
+                match stream {
+                    Ok(stream) => {
+                        pool.execute(|| {
+                            handle_connection(stream);
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("An error occurred trying to attach a client: {e}");
+                    }
+                }
+            }
+            println!("shutting down");
+        }
+        Err(e) => {
+            eprintln!("Something went wrong trying to bind to {SERVER}: {e}");
+        }
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
     println!("handling connection");
-    // let mut buf_reader = BufReader::new(&stream);
     // TODO handle errors gracefully
-    // let request: Vec<Result<String, _>> = buf_reader.read_line().lines().collect();
-    // println!("{:?}", request);
     let mut request_lines: Vec<String> = Vec::new();
     let mut buf = [0u8; 8192];
     let mut bytes_read = stream.read(&mut buf).unwrap();

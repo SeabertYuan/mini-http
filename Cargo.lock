@@ -3,14 +3,14 @@
 version = 4
 
 [[package]]
-name = "spawn-app-websocket-server"
+name = "websocket-client"
 version = "0.1.0"
 dependencies = [
  "ws-utils",
 ]
 
 [[package]]
-name = "websocket-client"
+name = "websocket-server"
 version = "0.1.0"
 dependencies = [
  "ws-utils",
